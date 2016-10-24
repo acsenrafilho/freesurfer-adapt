@@ -6,7 +6,7 @@ usage(){
   echo "    <T1 image> = The T1 data in Nifti format."
   echo "    <Brain extraction type> = BET: FSL-BET | 3dSS: EdSKullStrip (AFNI) | oBET: optiBET | ROBEX: ROBEX method"
   echo ""
-  echo "    NOTE: All the variables are set in the conf_variable.conf file."
+  echo "    NOTE: All brain extraction variables are set in the conf_variable.conf file."
   echo
 }
 
@@ -14,12 +14,19 @@ if [[ $# -lt 2 ]]; then
   usage
   exit
 fi
-#optiBET brain extraction
+
+#Check if FSL is installed in the system
+if [[ `which fsl` == "" ]]; then
+  echo "  FSL is missing! Please intall FSL before using this script."
+  echo "  More information in the website: http://fsl.fmrib.ox.ac.uk/fsl/fslwiki/"
+  echo ""
+  echo "recon-all-adapt terminated. (I'll be back!)"
+  exit
+fi
+
 
 T1_IMAGE=$1
-# T1_FOLDER=$(dirname $1)
 BET_METHOD=$2
-# cd $T1_FOLDER
 
 if [[ $BET_METHOD == "oBET" ]]; then
   # Check environment variables
@@ -96,6 +103,7 @@ if [[ $BET_METHOD == "3dSS" ]]; then
   #Transforming the output as binary brain mask
   fslmaths skull_strip_out.nii -bin skull_strip_out.nii
   mv skull_strip_out.nii.gz $(basename ${T1_IMAGE%.*.*})_3dSS_pushEdge${PUSH_EDGE}_shrFact${SHRINK_FAC}_shrBot${SHRINK_BOT}.nii.gz
+  rm skull_strip_out.nii
 
   echo " --> Correcting mask"
   fslmaths $(basename ${T1_IMAGE%.*.*})_3dSS_pushEdge${PUSH_EDGE}_shrFact${SHRINK_FAC}_shrBot${SHRINK_BOT}.nii.gz -kernel sphere 3 -dilM -fillh -ero $(basename ${T1_IMAGE%.*.*})_3dSS_pushEdge${PUSH_EDGE}_shrFact${SHRINK_FAC}_shrBot${SHRINK_BOT}.nii
