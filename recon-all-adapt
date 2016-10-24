@@ -23,7 +23,7 @@ BET_METHOD=$2
 
 if [[ $BET_METHOD == "oBET" ]]; then
   # Check environment variables
-  if [[ `which optiBET` == "" ]]; then
+  if [[ `which optiBET.sh` == "" ]]; then
     echo "optiBET may not be installed in the system. Check if exist the optiBET.sh environment variable."
     exit
   fi
