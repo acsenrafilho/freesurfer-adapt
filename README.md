@@ -12,7 +12,7 @@ The brain extraction methods available to use are:
 * [optiBET](https://montilab.psych.ucla.edu/fmri-wiki/optibet/)
 * [ROBEX](https://www.nitrc.org/projects/robex/)
 
-More details could be found in recent publications ([abstract](),[paper]())
+More details could be found in recent publications ([abstract](https://www.researchgate.net/publication/316215562_Optimization_of_brain_extraction_increases_global_cortical_thickness_accuracy),[paper]())
 
 # How to use
 * [Download](https://github.com/acsenrafilho/freesurfer-adapt/archive/master.zip) the freesurfer-adapt folder project
@@ -36,8 +36,8 @@ At this moment, with a new terminal opened, you could run the the script with th
 ```
 recon-all-adapt <path/to/T1.nii.gz> <Brain extraction method>
 ```
-**NOTE:** The variables for each brain extraction method is given in the config_variables.conf file, located inside the ``freesurfer-adapt`` folder.
+**NOTE:** The variables for each brain extraction method are given in the config_variables.conf file, located inside the ``freesurfer-adapt`` folder.
 
 # Contact
 
-If you need more details about this script, please feel free to send me an [email](mailto:acsenrafilho@gmail.com)
+If you need more details about this script, please feel free to send me an [email](mailto:acsenrafilho@usp.br)

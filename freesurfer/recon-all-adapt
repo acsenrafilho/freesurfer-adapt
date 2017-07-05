@@ -1,10 +1,10 @@
 #!/bin/bash
 usage(){
   echo "  Script to adapt the FreeSurfer pipeline."
-  echo "    Usage: $(basename $0) <T1 image> <Brain extraction type [BET|3dSS|oBET|ROBEX]>"
+  echo "    Usage: $(basename $0) <T1 image> <Brain extraction type [BET|3dSS|oBET|ROBEX|ANTs|BSE]>"
   echo ""
-  echo "    <T1 image> = The T1 data in Nifti format."
-  echo "    <Brain extraction type> = BET: FSL-BET | 3dSS: EdSKullStrip (AFNI) | oBET: optiBET | ROBEX: ROBEX method"
+  echo "    <T1 image> = The full path to T1 data in Nifti format (.nii.gz)."
+  echo "    <Brain extraction type> = BET: FSL-BET | 3dSS: EdSKullStrip (AFNI) | oBET: optiBET | ROBEX: ROBEX method | ANTs: ANTs method | BSE: BrainSuite method"
   echo ""
   echo "    NOTE: All brain extraction variables are set in the conf_variable.conf file."
   echo
@@ -217,5 +217,87 @@ if [[ $BET_METHOD == "ROBEX" ]]; then
   recon-all -s $(basename ${T1_IMAGE%.*.*})-ROBEX -sd $(dirname $1) -autorecon3
   exit
 fi
+if [[ $BET_METHOD == "ANTs" ]]; then
+  # Check environment variables
+  if [[ `which antsBrainExtraction.sh` == "" ]]; then
+    echo "ANTs Brain Extraction script may not be installed in the system. Check if ANTs is installed."
+    exit
+  fi
 
-echo "ERROR: Brain extraction method not found. Try a different option: [BET|3dSS|oBET|ROBEX]"
+  cd $(dirname $1)
+  echo " --> Performing ANTs brain extraction"
+  BRAINTEMPLATE=`cat $(dirname $0)/config_variables.conf | grep BRAINTEMPLATE= | cut -c15-600`
+  BRAINPROBMASK=`cat $(dirname $0)/config_variables.conf | grep BRAINPROBMASK= | cut -c15-600`
+  BRAINREGISTRATIONMASK=`cat $(dirname $0)/config_variables.conf | grep BRAINREGISTRATIONMASK= | cut -c23-620`
+  echo " Variables: "
+  echo "   BRAINTEMPLATE=$BRAINTEMPLATE"
+  echo "   BRAINPROBMASK=$BRAINPROBMASK"
+  echo "   BRAINREGISTRATIONMASK=$BRAINREGISTRATIONMASK"
+
+  #Apply ANTs
+  antsBrainExtraction.sh -d 3 -a ${T1_IMAGE} -e $BRAINTEMPLATE -m $BRAINPROBMASK -f $BRAINREGISTRATIONMASK -o $(basename ${T1_IMAGE%.*.*})_ants_
+
+  echo " --> Adapting and performing FreeSurfer recon-all"
+  MASK_IMAGE=$(basename ${T1_IMAGE%.*.*})_ants_BrainExtractionMask.nii.gz
+
+  #Run the first part of FreeSurfer pipeline - autorecon1 -noskullstrip
+  recon-all -s $(basename ${T1_IMAGE%.*.*})-ANTs -sd $(dirname $1) -i $T1_IMAGE -autorecon1 -noskullstrip
+
+  WHOLE_T1_FOLDER=$(basename ${T1_IMAGE%.*.*})-ANTs/mri/
+  mri_convert -it mgz -ot nii $WHOLE_T1_FOLDER/T1.mgz $WHOLE_T1_FOLDER/T1.nii
+  gzip -9 $WHOLE_T1_FOLDER/T1.nii
+  mri_convert -it nii -ot nii $MASK_IMAGE $MASK_IMAGE --conform
+  #Effectivelly performing the skull strip on T1 image
+  fslmaths $WHOLE_T1_FOLDER/T1.nii.gz -mas $MASK_IMAGE $WHOLE_T1_FOLDER/brainmask.auto.nii.gz
+  gzip -d $WHOLE_T1_FOLDER/brainmask.auto.nii.gz
+  mri_convert -it nii -ot mgz $WHOLE_T1_FOLDER/brainmask.auto.nii $WHOLE_T1_FOLDER/brainmask.auto.mgz
+  cp $WHOLE_T1_FOLDER/brainmask.auto.mgz $WHOLE_T1_FOLDER/brainmask.mgz
+
+  #Running the rest of FreeSurfer pipeline
+  recon-all -s $(basename ${T1_IMAGE%.*.*})-ANTs -sd $(dirname $1) -autorecon2
+  recon-all -s $(basename ${T1_IMAGE%.*.*})-ANTs -sd $(dirname $1) -autorecon3
+  exit
+fi
+if [[ $BET_METHOD == "BSE" ]]; then
+  # Check environment variables
+  if [[ `which bse` == "" ]]; then
+    echo "BSE may not be installed in the system. Check if BrainSuite is installed."
+    exit
+  fi
+
+  cd $(dirname $1)
+  echo " --> Performing BSE brain extraction"
+  DIFF_BS=`cat $(dirname $0)/config_variables.conf | grep DIFF_BS= | cut -c9-15`
+  EDGE_BS=`cat $(dirname $0)/config_variables.conf | grep EDGE_BS= | cut -c9-14`
+  NUMIT_BS=`cat $(dirname $0)/config_variables.conf | grep NUMIT_BS= | cut -c10-15`
+  echo " Variables: "
+  echo "   DIFF_BS=$DIFF_BS"
+  echo "   EDGE_BS=$EDGE_BS"
+  echo "   NUMIT_BS=$NUMIT_BS"
+
+  #Apply BSE
+  bse -i ${T1_IMAGE} --mask $(basename ${T1_IMAGE%.*.*})_bse_d${DIFF_BS}_n${NUMIT_BS}_s${EDGE_BS}.nii.gz -d $DIFF_BS -n $NUMIT_BS -s $EDGE_BS
+
+  echo " --> Adapting and performing FreeSurfer recon-all"
+  MASK_IMAGE=$(basename ${T1_IMAGE%.*.*})_bse_d${DIFF_BS}_n${NUMIT_BS}_s${EDGE_BS}.nii.gz
+
+  #Run the first part of FreeSurfer pipeline - autorecon1 -noskullstrip
+  recon-all -s $(basename ${T1_IMAGE%.*.*})-BSE -sd $(dirname $1) -i $T1_IMAGE -autorecon1 -noskullstrip
+
+  WHOLE_T1_FOLDER=$(basename ${T1_IMAGE%.*.*})-BSE/mri/
+  mri_convert -it mgz -ot nii $WHOLE_T1_FOLDER/T1.mgz $WHOLE_T1_FOLDER/T1.nii
+  gzip -9 $WHOLE_T1_FOLDER/T1.nii
+  mri_convert -it nii -ot nii $MASK_IMAGE $MASK_IMAGE --conform
+  #Effectivelly performing the skull strip on T1 image
+  fslmaths $WHOLE_T1_FOLDER/T1.nii.gz -mas $MASK_IMAGE $WHOLE_T1_FOLDER/brainmask.auto.nii.gz
+  gzip -d $WHOLE_T1_FOLDER/brainmask.auto.nii.gz
+  mri_convert -it nii -ot mgz $WHOLE_T1_FOLDER/brainmask.auto.nii $WHOLE_T1_FOLDER/brainmask.auto.mgz
+  cp $WHOLE_T1_FOLDER/brainmask.auto.mgz $WHOLE_T1_FOLDER/brainmask.mgz
+
+  #Running the rest of FreeSurfer pipeline
+  recon-all -s $(basename ${T1_IMAGE%.*.*})-BSE -sd $(dirname $1) -autorecon2
+  recon-all -s $(basename ${T1_IMAGE%.*.*})-BSE -sd $(dirname $1) -autorecon3
+  exit
+fi
+
+echo "ERROR: Brain extraction method not found. Try a different option: [BET|3dSS|oBET|ROBEX|ANTs|BSE]"
